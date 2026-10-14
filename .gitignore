@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pt
+# dataset generati e output dei test (rigenerabili dagli script)
+dataset/numeric/*.txt
+dataset/text/*.txt
+dataset/text_processed/*
+results/*.png
+results/*.csv
+!**/.gitkeep
