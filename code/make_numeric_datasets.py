@@ -51,7 +51,7 @@ def seq_sine(n: int, period: float = 20.0, noise: float = 0.0) -> np.ndarray:
         s = s + np.random.normal(0.0, noise, size=n)
     return s
 
- """
+"""
 Copy task a ritardo fisso: la rete deve riprodurre il valore visto 'delay' passi prima. 
 E' il banco di prova classico per la memoria a lungo termine: aumentando delay si mette in crisi la RNN semplice (gradiente che svanisce) mentre LSTM/GRU,
 grazie ai gate, mantengono il segnale. E' il task che meglio mostra *perche'* LSTM e GRU sono state inventate.
