@@ -15,8 +15,7 @@ from typing import Iterator
 import numpy as np
 import torch
 
-
- """
+"""
 Restituisce il device di calcolo migliore disponibile.
 La priorita' e' la GPU CUDA, se non e' disponibile si ripiega sulla CPU, cosi' il codice resta eseguibile ovunque.
 """
