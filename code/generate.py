@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import math as _math
 
 import numpy as np
 import torch
@@ -98,8 +99,17 @@ Continuazione della sequenza numerica di 'n_steps' valori.
 @torch.no_grad()
 def generate_numeric(model, cfg: ModelConfig, seed_values: list[float],n_steps: int, seq_len: int, device,mu: float = 0.0, sigma: float = 1.0) -> dict:
     
+    def _fwd(v: float) -> float:   # spazio originale -> spazio del modello
+        if log_transform:
+            v = _math.log1p(v)
+        return (v - mu) / sigma
+
+    def _inv(z: float) -> float:   # spazio del modello -> spazio originale
+        v = z * sigma + mu
+        return _math.expm1(v) if log_transform else v
+
     # porta il seme nello spazio normalizzato in cui il modello opera
-    context = [(v - mu) / sigma for v in seed_values]
+    context = [_fwd(v) for v in seed_values]
 
     preds, latencies = [], []
     for _ in range(n_steps):
@@ -110,7 +120,7 @@ def generate_numeric(model, cfg: ModelConfig, seed_values: list[float],n_steps: 
         latencies.append(t["elapsed"])
         next_norm = float(out.squeeze().item())
         context.append(next_norm)
-        preds.append(next_norm * sigma + mu)       # de-normalizzazione
+        preds.append(_inv(next_norm))              # de-normalizzazione (+ de-log se attivo)
 
     mean_ms = float(np.mean(latencies) * 1000.0)
     return {
@@ -139,27 +149,25 @@ def main() -> None:
     pn.add_argument("--n", type=int, default=10, help="passi da predire")
     pn.add_argument("--mu", type=float, default=0.0)
     pn.add_argument("--sigma", type=float, default=1.0)
+    pn.add_argument("--log-transform", action="store_true", help="usare se il modello e' stato addestrato con --log-transform")
 
     args = p.parse_args()
     device = get_device()
     model, cfg = load_checkpoint(args.checkpoint, device)
 
     if args.mode == "text":
-        res = generate_text(model, cfg, args.vocab, args.seed, args.n,
-                            args.seq_len, args.temperature, device)
+        res = generate_text(model, cfg, args.vocab, args.seed, args.n, args.seq_len, args.temperature, device)
         print(f"\n[seme] {res['seed']!r}")
         print(f"[generato]\n{res['seed']}{res['generated']}")
         print(f"\n[stats] latenza media {res['mean_latency_ms']} ms/token | "
               f"{res['throughput_tok_s']} token/s")
     else:
         seed_values = [float(x) for x in args.seed.split(",")]
-        res = generate_numeric(model, cfg, seed_values, args.n, args.seq_len,
-                               device, mu=args.mu, sigma=args.sigma)
+        res = generate_numeric(model, cfg, seed_values, args.n, args.seq_len, device, mu=args.mu, sigma=args.sigma, log_transform=args.log_transform)
         print(f"\n[seme] {res['seed']}")
         print(f"[predetto] {res['predicted']}")
         print(f"\n[stats] latenza media {res['mean_latency_ms']} ms/passo | "
               f"{res['throughput_step_s']} passi/s")
-
 
 if __name__ == "__main__":
     main()

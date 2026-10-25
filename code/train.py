@@ -186,6 +186,8 @@ def _cli() -> None:
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--batch", type=int, default=64)
     p.add_argument("--acc-threshold", type=float, default=None)
+    p.add_argument("--log-transform", action="store_true",
+                   help="regressione: applica log1p (per serie esponenziali, es. Fibonacci)")
     p.add_argument("--vocab-size", type=int, default=None,
                    help="classificazione: |vocab| (letto dal vocab se omesso)")
     p.add_argument("--save-to", default=None,
@@ -198,7 +200,7 @@ def _cli() -> None:
     # costruzione del dataset a seconda del task
     if args.task == "regression":
         series = load_txt(args.data)
-        ds = NumericWindowDataset(series, seq_len=args.seq_len, stride=args.stride)
+        ds = NumericWindowDataset(series, seq_len=args.seq_len, stride=args.stride, log_transform=args.log_transform)
         cfg = ModelConfig(cell_type=args.cell, task="regression",
                           input_size=1, hidden_size=args.hidden, num_layers=args.layers)
     else:

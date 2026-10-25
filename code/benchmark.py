@@ -59,11 +59,11 @@ def measure_inference_time(model, loader, device, repeats: int = 3) -> float:
     return float(np.mean(times) * 1000.0)        # ms
 
 # Costruisce (train_loader, val_loader, cfg_parziale) secondo il task.
-def build_datasets(task: str, data_path: str, seq_len: int, stride: int):
+def build_datasets(task: str, data_path: str, seq_len: int, stride: int, log_transform: bool = False):
     # discrimina in base al tipo di task (numerico o testuale)
     if task == "regression":            # dataset numerici
         series = load_txt(data_path)
-        ds = NumericWindowDataset(series, seq_len=seq_len, stride=stride)
+        ds = NumericWindowDataset(series, seq_len=seq_len, stride=stride, log_transform=log_transform)
         extra = {"input_size": 1}
     else:                               # dataset testuali
         ids = np.load(data_path)
@@ -73,7 +73,7 @@ def build_datasets(task: str, data_path: str, seq_len: int, stride: int):
     return ds, extra
 
 # Esegue il confronto completo sulle tre reti e ritorna una lista di record.
-def run_benchmark(task: str, data_path: str, seq_len: int, stride: int, hidden: int, layers: int, epochs: int, batch: int, acc_threshold: Optional[float], seed: int = 42) -> list[dict]:
+def run_benchmark(task: str, data_path: str, seq_len: int, stride: int, hidden: int, layers: int, epochs: int, batch: int, acc_threshold: Optional[float], seed: int = 42, log_transform: bool = False) -> list[dict]:
 
     device = get_device()
     paths = project_paths()
@@ -84,11 +84,11 @@ def run_benchmark(task: str, data_path: str, seq_len: int, stride: int, hidden: 
 
     for cell in CELLS:
         set_seed(seed)      # reset del seme PRIMA di ogni rete: stessa inizializzazione e stesso ordine di shuffling -> confronto equo
-
-        ds, extra = build_datasets(task, data_path, seq_len, stride)        # get dataset
-        train_ds, val_ds = train_val_split(ds, val_frac=0.2, seed=seed)     # get training and validation set
-        train_loader = DataLoader(train_ds, batch_size=batch, shuffle=True) # initialize train loader
-        val_loader = DataLoader(val_ds, batch_size=batch, shuffle=False)    # initialize validation loader
+     
+        ds, extra = build_datasets(task, data_path, seq_len, stride, log_transform) # get dataset
+        train_ds, val_ds = train_val_split(ds, val_frac=0.2, seed=seed)             # get training and validation set
+        train_loader = DataLoader(train_ds, batch_size=batch, shuffle=True)         # initialize train loader
+        val_loader = DataLoader(val_ds, batch_size=batch, shuffle=False)            # initialize validation loader
 
         cfg = ModelConfig(cell_type=cell, task=task, hidden_size=hidden,num_layers=layers, **extra) # config the model
         model = build_model(cfg)
@@ -187,14 +187,15 @@ def main() -> None:
     p.add_argument("--acc-threshold", type=float, default=0.98,
                    help="solo regressione: soglia di accuracy per 'epoche-a-soglia'")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--log-transform", action="store_true",
+                   help="regressione: applica log1p (per serie esponenziali, es. Fibonacci)")
     args = p.parse_args()
 
     run_benchmark(task=args.task, data_path=args.data, seq_len=args.seq_len,
                   stride=args.stride, hidden=args.hidden, layers=args.layers,
                   epochs=args.epochs, batch=args.batch,
                   acc_threshold=args.acc_threshold if args.task == "regression" else None,
-                  seed=args.seed)
-
+                  seed=args.seed, log_transform=args.log_transform)
 
 if __name__ == "__main__":
     main()

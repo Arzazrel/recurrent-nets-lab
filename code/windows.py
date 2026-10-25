@@ -25,13 +25,19 @@ Standardizza una serie: (x - media) / deviazione_standard.
 Motivo: alcune serie (Fibonacci su tutte) crescono in modo esplosivo. Dati di input con magnitudine enorme saturano le attivazioni (tanh/sigmoid) e
 rendono instabile la discesa del gradiente. Portando media 0 e varianza 1 si stabilizza l'addestramento. 
 Restituiamo anche media e std per poter de-normalizzare le predizioni al momento dell'inferenza.
+ROBUSTEZZA: se l'input contiene valori non finiti (inf/nan), media e deviazione diventano nan e TUTTA la serie normalizzata diventa nan, propagandosi a loss=nan e azzerando il training. 
+Qui lo intercettiamo con un errore esplicito.
 """
 def standardize(x: np.ndarray) -> tuple[np.ndarray, float, float]:
     
+    x = x.astype(np.float64)
+    if not np.all(np.isfinite(x)):
+        n_bad = int((~np.isfinite(x)).sum())
+        raise ValueError(f"la serie contiene {n_bad} valori non finiti (inf/nan): tipico delle serie a crescita esponenziale (es. Fibonacci lungo). "
+            f"Rigenera con una lunghezza minore, oppure usa log_transform=True nel dataset (flag --log-transform) per condizionare la serie.")
     mu = float(x.mean())
     sigma = float(x.std()) or 1.0       # evita divisione per zero su serie costanti
     return (x - mu) / sigma, mu, sigma
-
 
 """
 Dataset di finestre per la regressione sul valore successivo.
@@ -49,11 +55,22 @@ La dimensione di feature esplicita serve perche' nn.RNN/LSTM/GRU si aspettano in
 """
 class NumericWindowDataset(Dataset):
     # inizializzazione
-    def __init__(self, x: np.ndarray, seq_len: int, stride: int = 1,delay: Optional[int] = None, normalize: bool = True):
+    def __init__(self, x: np.ndarray, seq_len: int, stride: int = 1,delay: Optional[int] = None, normalize: bool = True, log_transform: bool = False):
         self.seq_len = seq_len                          # windows len
         self.mu, self.sigma = 0.0, 1.0                  # mean 0 and vaiance 1
+        self.log_transform = log_transform
+        x = x.astype(np.float64)
+
+        # Trasformazione logaritmica opzionale per serie a crescita esponenziale (Fibonacci, geometriche). 
+        # log1p(x)=log(1+x) comprime la dinamica e rende la serie quasi lineare -> ben condizionata per la rete. 
+        # Richiede valori non negativi (vero per le serie esponenziali del laboratorio).
+        if log_transform:
+            if np.any(x < 0):
+                raise ValueError("log_transform richiede valori non negativi")
+            x = np.log1p(x)
+
         if normalize:                                   # check if normalise
-            x, self.mu, self.sigma = standardize(x.astype(np.float64))
+            x, self.mu, self.sigma = standardize(x)
         self.x = torch.tensor(x, dtype=torch.float32)
         self.delay = delay                              # windows stride
 

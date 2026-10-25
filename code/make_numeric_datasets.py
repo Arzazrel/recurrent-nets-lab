@@ -29,6 +29,8 @@ def seq_decreasing(n: int, step: int = 1, start: int = 0) -> np.ndarray:
 """
 Fibonacci: a[t] = a[t-1] + a[t-2]. Richiede memoria di due passi.
 Cresce esponenzialmente: senza normalizzazione i valori esplodono e saturano la rete, qui salviamo i valori grezzi per ispezionabilita'.
+ATTENZIONE alla crescita esponenziale: Fibonacci raddoppia ~ogni passo e supera il massimo rappresentabile dal float64 (~1.8e308) gia' intorno a t~1476.
+Oltre quel punto i valori diventano +inf, e a cascata la standardizzazione (media/deviazione) produce nan, azzerando il training
 """
 def seq_fibonacci(n: int) -> np.ndarray:
     
@@ -36,13 +38,18 @@ def seq_fibonacci(n: int) -> np.ndarray:
     if n > 1:
         a[1] = 1.0
     for t in range(2, n):
-        a[t] = a[t - 1] + a[t - 2]
+        nxt = a[t - 1] + a[t - 2]
+        # troncamento di sicurezza: oltre questo punto i valori non sono rappresentabili. Restituiamo la porzione valida gia' calcolata.
+        if not np.isfinite(nxt):
+            print(f"[fibonacci] troncata a t={t} per limite del float64 (valori oltre questo indice non rappresentabili)")
+            return a[:t]
+        a[t] = nxt
     return a
 
 """
 Onda sinusoidale (opz. con rumore gaussiano). 
 Dipendenza periodica: limitato in ampiezza e quindi stabile numericamente. Rappresenta un segnale continuo.
-    """
+"""
 def seq_sine(n: int, period: float = 20.0, noise: float = 0.0) -> np.ndarray:
     
     t = np.arange(n, dtype=np.float64)
